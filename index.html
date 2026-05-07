@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
-    <title>Flappy Mobile</title>
+    <title>Flappy Ultra Pro</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #70c5ce; position: fixed; width: 100%; height: 100%; }
-        canvas { display: block; }
+        body { margin: 0; overflow: hidden; background: #222; font-family: 'Arial Black', sans-serif; position: fixed; width: 100%; height: 100%; }
+        canvas { display: block; touch-action: none; }
     </style>
 </head>
 <body>
@@ -16,90 +16,217 @@
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
 
-    // Ajusta o tamanho para o celular
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    let birdY = canvas.height / 2;
-    let birdX = 50;
-    let velocity = 0;
-    let gravity = 0.4;
-    let jump = -7;
+    // Estados do Jogo: 'MENU', 'PLAYING', 'GAMEOVER'
+    let gameState = 'MENU';
     let score = 0;
+    let highScore = localStorage.getItem('flappyHighScore') || 0;
     let frames = 0;
-    let gameActive = true;
+
+    // Configurações do Pássaro
+    const bird = {
+        x: 60,
+        y: canvas.height / 2,
+        w: 34,
+        h: 24,
+        velocity: 0,
+        gravity: 0.3,
+        jump: -5.5,
+        rotation: 0
+    };
+
     const pipes = [];
     const pipeWidth = 60;
-    const pipeGap = 160;
+    let pipeGap = 180; // Começa fácil
 
-    // CONTROLE DE TOQUE E TECLADO
-    function handleAction(e) {
-        e.preventDefault(); // Evita o zoom/rolagem ao tocar
-        if(gameActive) velocity = jump;
-        else resetGame();
+    function handleInput(e) {
+        if(e.type === 'touchstart') e.preventDefault();
+        
+        if (gameState === 'MENU') {
+            resetGame();
+            gameState = 'PLAYING';
+        } else if (gameState === 'PLAYING') {
+            bird.velocity = bird.jump;
+        } else if (gameState === 'GAMEOVER') {
+            gameState = 'MENU';
+        }
     }
 
-    window.addEventListener("touchstart", handleAction, {passive: false});
-    window.addEventListener("keydown", handleAction);
+    window.addEventListener("touchstart", handleInput, {passive: false});
+    window.addEventListener("keydown", (e) => { if(e.code === 'Space' || e.code === 'ArrowUp') handleInput(e); });
 
     function resetGame() {
-        birdY = canvas.height / 2;
-        velocity = 0;
+        bird.y = canvas.height / 2;
+        bird.velocity = 0;
+        bird.rotation = 0;
         pipes.length = 0;
         score = 0;
+        pipeGap = 180;
         frames = 0;
-        gameActive = true;
-        loop();
+    }
+
+    function drawBird() {
+        ctx.save();
+        ctx.translate(bird.x + bird.w/2, bird.y + bird.h/2);
+        
+        // FÍSICA DE ROTAÇÃO
+        bird.rotation = Math.min(Math.PI/4, Math.max(-Math.PI/4, bird.velocity * 0.1));
+        ctx.rotate(bird.rotation);
+
+        // Corpo (Amarelo)
+        ctx.fillStyle = "#fce303";
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(-bird.w/2, -bird.h/2, bird.w, bird.h, 5);
+        ctx.fill();
+        ctx.stroke();
+
+        // Asa
+        ctx.fillStyle = "white";
+        let wingMove = Math.sin(frames * 0.3) * 5;
+        ctx.beginPath();
+        ctx.roundRect(-15, wingMove, 15, 10, 3);
+        ctx.fill();
+        ctx.stroke();
+
+        // Olho
+        ctx.fillStyle = "white";
+        ctx.beginPath();
+        ctx.arc(8, -5, 6, 0, Math.PI*2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "black";
+        ctx.beginPath();
+        ctx.arc(10, -5, 2, 0, Math.PI*2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    function drawPipe(x, top, color) {
+        ctx.fillStyle = color;
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 3;
+
+        // Cano Cima
+        ctx.fillRect(x, 0, pipeWidth, top);
+        ctx.strokeRect(x, -5, pipeWidth, top + 5);
+        // Boca do cano
+        ctx.fillRect(x - 5, top - 25, pipeWidth + 10, 25);
+        ctx.strokeRect(x - 5, top - 25, pipeWidth + 10, 25);
+
+        // Cano Baixo
+        let bottomY = top + pipeGap;
+        ctx.fillRect(x, bottomY, pipeWidth, canvas.height);
+        ctx.strokeRect(x, bottomY, pipeWidth, canvas.height - bottomY + 5);
+        // Boca do cano
+        ctx.fillRect(x - 5, bottomY, pipeWidth + 10, 25);
+        ctx.strokeRect(x - 5, bottomY, pipeWidth + 10, 25);
+    }
+
+    function drawUI() {
+        if (gameState === 'MENU') {
+            ctx.fillStyle = "rgba(0,0,0,0.4)";
+            ctx.fillRect(0,0, canvas.width, canvas.height);
+            ctx.fillStyle = "white";
+            ctx.textAlign = "center";
+            ctx.font = "bold 40px Arial";
+            ctx.fillText("FLAPPY BIRD", canvas.width/2, canvas.height/2 - 50);
+            ctx.font = "20px Arial";
+            ctx.fillText("TOQUE PARA COMEÇAR", canvas.width/2, canvas.height/2 + 20);
+        }
+
+        if (gameState === 'PLAYING') {
+            ctx.fillStyle = "white";
+            ctx.font = "bold 60px Arial";
+            ctx.textAlign = "center";
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = "black";
+            ctx.strokeText(score, canvas.width/2, 100);
+            ctx.fillText(score, canvas.width/2, 100);
+        }
+
+        if (gameState === 'GAMEOVER') {
+            ctx.fillStyle = "rgba(0,0,0,0.7)";
+            ctx.fillRect(0,0, canvas.width, canvas.height);
+            ctx.fillStyle = "white";
+            ctx.textAlign = "center";
+            ctx.font = "bold 40px Arial";
+            ctx.fillText("GAME OVER", canvas.width/2, canvas.height/2 - 80);
+            ctx.font = "30px Arial";
+            ctx.fillText(`PONTOS: ${score}`, canvas.width/2, canvas.height/2);
+            ctx.fillText(`MELHOR: ${highScore}`, canvas.width/2, canvas.height/2 + 50);
+            ctx.font = "20px Arial";
+            ctx.fillText("TOQUE PARA VOLTAR", canvas.width/2, canvas.height/2 + 120);
+        }
+    }
+
+    function update() {
+        if (gameState === 'PLAYING') {
+            bird.velocity += bird.gravity;
+            bird.y += bird.velocity;
+
+            // DIFICULDADE PROGRESSIVA: O buraco diminui a cada 10 pontos
+            pipeGap = Math.max(120, 180 - (Math.floor(score/10) * 10));
+
+            if (frames % 90 === 0) {
+                let h = Math.random() * (canvas.height - pipeGap - 200) + 100;
+                // COR DO CANO MUDA: Verde -> Bronze -> Prata -> Ouro
+                let color = "#73bf2e";
+                if (score >= 10) color = "#cd7f32";
+                if (score >= 20) color = "#c0c0c0";
+                if (score >= 30) color = "#ffd700";
+                
+                pipes.push({ x: canvas.width, top: h, color: color, passed: false });
+            }
+
+            for (let i = pipes.length - 1; i >= 0; i--) {
+                pipes[i].x -= (3 + (score/20)); // Aumenta a velocidade gradualmente
+
+                // Colisão
+                if (bird.x + bird.w > pipes[i].x && bird.x < pipes[i].x + pipeWidth) {
+                    if (bird.y < pipes[i].top || bird.y + bird.h > pipes[i].top + pipeGap) {
+                        endGame();
+                    }
+                }
+
+                if (!pipes[i].passed && pipes[i].x < bird.x) {
+                    score++;
+                    pipes[i].passed = true;
+                }
+
+                if (pipes[i].x + pipeWidth < -50) pipes.splice(i, 1);
+            }
+
+            if (bird.y + bird.h > canvas.height || bird.y < 0) endGame();
+        }
+        frames++;
+    }
+
+    function endGame() {
+        gameState = 'GAMEOVER';
+        if (score > highScore) {
+            highScore = score;
+            localStorage.setItem('flappyHighScore', highScore);
+        }
     }
 
     function loop() {
-        if (!gameActive) return;
-        ctx.fillStyle = "#70c5ce";
+        // Céu dinâmico (muda de cor conforme os pontos)
+        let hue = 197 - (score * 2);
+        ctx.fillStyle = `hsl(${hue}, 53%, 61%)`;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        velocity += gravity;
-        birdY += velocity;
+        update();
         
-        ctx.fillStyle = "yellow";
-        ctx.fillRect(birdX, birdY, 30, 30);
+        pipes.forEach(p => drawPipe(p.x, p.top, p.color));
+        drawBird();
+        drawUI();
 
-        if (frames % 80 === 0) {
-            let height = Math.random() * (canvas.height - pipeGap - 100) + 50;
-            pipes.push({ x: canvas.width, top: height });
-        }
-
-        for (let i = pipes.length - 1; i >= 0; i--) {
-            pipes[i].x -= 3;
-            ctx.fillStyle = "#2e7d32";
-            ctx.fillRect(pipes[i].x, 0, pipeWidth, pipes[i].top);
-            ctx.fillRect(pipes[i].x, pipes[i].top + pipeGap, pipeWidth, canvas.height);
-
-            if (birdX + 30 > pipes[i].x && birdX < pipes[i].x + pipeWidth) {
-                if (birdY < pipes[i].top || birdY + 30 > pipes[i].top + pipeGap) gameOver();
-            }
-            if (pipes[i].x === birdX - 1) score++;
-            if (pipes[i].x + pipeWidth < 0) pipes.splice(i, 1);
-        }
-
-        if (birdY + 30 > canvas.height || birdY < 0) gameOver();
-
-        ctx.fillStyle = "white";
-        ctx.font = "bold 30px Arial";
-        ctx.fillText(score, canvas.width / 2, 50);
-        frames++;
         requestAnimationFrame(loop);
-    }
-
-    function gameOver() {
-        gameActive = false;
-        ctx.fillStyle = "rgba(0,0,0,0.6)";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "white";
-        ctx.textAlign = "center";
-        ctx.font = "bold 40px Arial";
-        ctx.fillText("GAME OVER", canvas.width/2, canvas.height/2);
-        ctx.font = "20px Arial";
-        ctx.fillText("Toque para reiniciar", canvas.width/2, canvas.height/2 + 50);
     }
 
     loop();
